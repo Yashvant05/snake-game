@@ -1,151 +1,158 @@
 const board = document.querySelector(".board");
 
-const startButton = document.querySelector(".start-btn")
-const modal = document.querySelector(".modal")
+const startButton = document.querySelector(".start-btn");
+const modal = document.querySelector(".modal");
 
-const startGameModal = document.querySelector(".start-game")
-const gameOverModal = document.querySelector(".game-over")
+const startGameModal = document.querySelector(".start-game");
+const gameOverModal = document.querySelector(".game-over");
 
-const restartButton = document.querySelector(".btn-restart")
+const restartButton = document.querySelector(".btn-restart");
 
-const highScoreElement = document.querySelector("#high-score")
-const scoreElement = document.querySelector("#score")
-const timeElement = document.querySelector("#time")
+const highScoreElement = document.querySelector(".high-score");
+const scoreElement = document.querySelector(".score");
+const timeElement = document.querySelector(".time");
 
-const blockHeight = 50
-const blockWidth = 50
+const blockSize = 50;
 
-let highScore = localStorage.getItem("highScore") || 0
-let score = 0
-let time = `00-00`
+let highScore = localStorage.getItem("highScore") || 0;
+let score = 0;
+let time = 0;
 
-highScoreElement.innerText = highScore
+highScoreElement.innerText = highScore;
 
-const cols = Math.floor(board.clientWidth / blockWidth);
-const rows = Math.floor(board.clientHeight / blockHeight);
+const cols = Math.floor(board.clientWidth / blockSize);
+const rows = Math.floor(board.clientHeight / blockSize);
 
-const blocks = []
-let snake = [{
-    x: 1, y: 3
-}]
+const blocks = {};
+let snake = [{ x: 1, y: 3 }];
+let direction = "right";
+let intervalID = null;
+let timerIntervalID = null;
+let food = generateFood();
 
-let direction = 'right'
-let intervalID = "null"
-let timerIntervalID = "null"
-let food = {x: Math.floor(Math.random() * rows), y: Math.floor(Math.random() * cols)}
+function generateFood() {
+    let pos;
+    do {
+        pos = {
+            x: Math.floor(Math.random() * rows),
+            y: Math.floor(Math.random() * cols),
+        };
+    } while (snake.some(s => s.x === pos.x && s.y === pos.y));
+    return pos;
+}
 
-
-for(let row = 0; row < rows; row++){
-    for(let col = 0; col < cols; col++){
-        const block = document.createElement('div');
+for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+        const block = document.createElement("div");
         block.classList.add("block");
         board.appendChild(block);
-        blocks[ `${row}-${col}` ] = block
+        blocks[`${row}-${col}`] = block;
     }
 }
 
-function render(){
-    let head = null
+function render() {
+    let head = { ...snake[0] };
 
-    blocks[`${food.x}-${food.y}`].classList.add("food")
+    if (direction === "left") head.y--;
+    if (direction === "right") head.y++;
+    if (direction === "up") head.x--;
+    if (direction === "down") head.x++;
 
-    if (direction === "left"){
-        head = {x: snake[0].x, y: snake[0].y - 1}
-    } else if(direction === "right"){
-        head = {x: snake[0].x, y: snake[0].y + 1}
-    } else if(direction === "down"){
-        head = {x: snake[0].x + 1, y: snake[0].y}
-    } else if(direction === "up"){
-        head = {x: snake[0].x - 1, y: snake[0].y}
-    }
-
-    if(head.x < 0 || head.x >= rows || head.y < 0 || head.y >= cols){
-        clearInterval(intervalID)
-        modal.style.display = "flex"
-        startGameModal.style.display = "none"
-        gameOverModal.style.display = "flex"
+    // Wall collision
+    if (
+        head.x < 0 ||
+        head.x >= rows ||
+        head.y < 0 ||
+        head.y >= cols ||
+        snake.some(seg => seg.x === head.x && seg.y === head.y)
+    ) {
+        endGame();
         return;
     }
 
+    snake.unshift(head);
 
-    //Food consume logic
-    if(head.x == food.x && head.y == food.y){
-        blocks[`${food.x}-${food.y}`].classList.remove("food")
-        food = {
-            x: Math.floor(Math.random() * rows), y: Math.floor(Math.random() * cols)
+    if (head.x === food.x && head.y === food.y) {
+        score += 10;
+        scoreElement.innerText = score;
+
+        if (score > highScore) {
+            highScore = score;
+            highScoreElement.innerText = highScore;
+            localStorage.setItem("highScore", highScore);
         }
-        blocks[`${food.x}-${food.y}`].classList.add("food")
-        snake.unshift(head)
 
-        score += 10
-        scoreElement.innerText = score
-
-        if (score>highScore){
-            highScore = score
-            localStorage.setItem("highScore", highScore.toString())
-        }
+        blocks[`${food.x}-${food.y}`].classList.remove("food");
+        food = generateFood();
+    } else {
+        const tail = snake.pop();
+        blocks[`${tail.x}-${tail.y}`].classList.remove("fill");
     }
 
-    snake.forEach(segment=>{
-        blocks[`${segment.x}-${segment.y}`].classList.remove("fill")
-    })
-    snake.unshift(head)
-    snake.pop()
-
-    snake.forEach(segment=>{
-        blocks[`${segment.x}-${segment.y}`].classList.add("fill")
-    })
+    blocks[`${food.x}-${food.y}`].classList.add("food");
+    blocks[`${head.x}-${head.y}`].classList.add("fill");
 }
 
-startButton.addEventListener("click", ()=>{
-    modal.style.display = "none"
-    intervalID = setInterval(() => {render()}, 300)
-    timerIntervalID = setInterval(()=>{
-        let [min, sec] = time.split("-").map(Number)
-        
-        if(sec == 59){
-            min += 1
-            sec = 0
-        } else {
-            sec += 1
-        }
+function startGame() {
+    modal.style.display = "none";
+    startGameModal.style.display = "flex";
+    gameOverModal.style.display = "none";
 
-        time = `${min}-${sec}`
-        timeElement.innerText = time
-    }, 1000)
-})
+    intervalID = setInterval(render, 300);
+    timerIntervalID = setInterval(() => {
+        time++;
+        const min = String(Math.floor(time / 60)).padStart(2, "0");
+        const sec = String(time % 60).padStart(2, "0");
+        timeElement.innerText = `${min}:${sec}`;
+    }, 1000);
+}
 
-restartButton.addEventListener("click", restartGame)
+function endGame() {
+    clearInterval(intervalID);
+    clearInterval(timerIntervalID);
+    modal.style.display = "flex";
+    startGameModal.style.display = "none";
+    gameOverModal.style.display = "flex";
+}
 
 function restartGame() {
-    blocks[ `${food.x}-${food.y}`].classList.remove(".food")
-    snake.forEach(segment => {
-        blocks[`${segment.x}-${segment.y}`].classList.remove("fill")
-    })
+    clearInterval(intervalID);
+    clearInterval(timerIntervalID);
 
-    score = 0
-    time = `00-00`
+    Object.values(blocks).forEach(b => b.classList.remove("fill", "food"));
 
-    scoreElement.innerText = score
-    timeElement.innerText = time
-    highScoreElement.innerText = highScore
+    score = 0;
+    time = 0;
+    direction = "right";
+    snake = [{ x: 1, y: 3 }];
+    food = generateFood();
 
-    modal.style.display = "none"
-    direction = "down"
-    snake = [ {x:1, y:3}]
-    food = {x: Math.floor(Math.random() * rows), y: Math.floor(Math.random() * cols)}
-    intervalID = setInterval(() => {render()}, 300)
+    scoreElement.innerText = score;
+    timeElement.innerText = "00:00";
+
+    startGame();
 }
 
-addEventListener("keydown", (event) => {
-    if(event.key == "ArrowUp"){
-        direction = "up"
-    }else if(event.key == "ArrowDown"){
-        direction = "down"
-    }else if(event.key == "ArrowRight"){
-        direction = "right"
-    }else if(event.key == "ArrowLeft"){
-        direction = "left"
-    }
+startButton.addEventListener("click", startGame);
+restartButton.addEventListener("click", restartGame);
 
-})
+addEventListener("keydown", e => {
+    const opposites = {
+        up: "down",
+        down: "up",
+        left: "right",
+        right: "left",
+    };
+
+    const keyMap = {
+        ArrowUp: "up",
+        ArrowDown: "down",
+        ArrowLeft: "left",
+        ArrowRight: "right",
+    };
+
+    const newDir = keyMap[e.key];
+    if (newDir && opposites[newDir] !== direction) {
+        direction = newDir;
+    }
+});
